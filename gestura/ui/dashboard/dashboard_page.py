@@ -13,7 +13,8 @@ from __future__ import annotations
 import time
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QComboBox, QGridLayout, QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
+                               QWidget)
 
 from ...core.safety_manager import EngineState
 from ...services.tracking_service import CameraStatus, Telemetry
@@ -30,6 +31,7 @@ STATE_TEXT = {
 
 class DashboardPage(QWidget):
     calibrate_requested = Signal()
+    macros_requested = Signal()
 
     def __init__(self, app, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -87,23 +89,68 @@ class DashboardPage(QWidget):
             grid.addWidget(c, 0, i)
         root.addLayout(grid)
 
+        # ---- AIR COMMAND + display selection
+        air_row = QHBoxLayout()
+        air_row.setSpacing(16)
+        air = Card("Air Command")
+        self.wheel_chip = StatusChip("Wheel idle", "off")
+        self.wheel_label = label("Closed", "bigValue")
+        self.wheel_detail = label("Left fist opens · point right · pinch confirms",
+                                  "hint", wrap=True)
+        self.wheel_toggle = ToggleRow("AIR COMMAND wheel",
+                                      "Allow-listed radial menu",
+                                      self.app.settings.wheel.enabled)
+        self.wheel_toggle.setMinimumHeight(46)
+        self.wheel_toggle.toggled.connect(self._set_wheel_enabled)
+        self.mode_badge = label("", "modeBadge")
+        macros_btn = QPushButton("Edit AIR MACROS")
+        macros_btn.clicked.connect(self.macros_requested)
+        air.body.addWidget(self.mode_badge)
+        air.body.addWidget(self.wheel_chip, 0, Qt.AlignmentFlag.AlignLeft)
+        air.body.addWidget(self.wheel_label)
+        air.body.addWidget(self.wheel_detail)
+        air.body.addWidget(self.wheel_toggle)
+        air.body.addWidget(macros_btn)
+        # The paired display card is short; without a floor the equal-height row
+        # squeezes this card and its toggle row overlaps its own caption.
+        air.setMinimumHeight(268)
+        air_row.addWidget(air, 1)
+
+        disp = Card("Active display")
+        self.display_combo = QComboBox()
+        self.display_combo.setMinimumWidth(220)
+        self.display_combo.currentIndexChanged.connect(self._display_picked)
+        refresh = QPushButton("Refresh")
+        refresh.clicked.connect(self._refresh_displays)
+        drow = QHBoxLayout()
+        drow.addWidget(self.display_combo, 1)
+        drow.addWidget(refresh)
+        disp.body.addLayout(drow)
+        self.display_detail = label("", "hint", wrap=True)
+        disp.body.addWidget(self.display_detail)
+        disp.body.addStretch(1)
+        air_row.addWidget(disp, 1)
+        root.addLayout(air_row)
+        self._loading_displays = False
+        self._refresh_displays()
+
         # ---- modes + preview
         bottom = QHBoxLayout()
         bottom.setSpacing(16)
         modes = Card("Operating modes")
         m = app.settings.modes
         self.mode_rows = {
-            "mouse": ToggleRow("Mouse mode", "Point to move, pinch to click (hold to drag), two fingers scroll, three fingers set the volume, two open hands zoom.", m.mouse),
-            "navigation": ToggleRow("Navigation mode", "Turn head for back / forward, nod to confirm.", m.navigation),
-            "keyboard": ToggleRow("Keyboard mode", "Floating on-screen keyboard; select keys with the hand cursor.", m.keyboard),
+            "mouse": ToggleRow("Mouse mode", "Point, click, drag, scroll, volume, zoom", m.mouse),
+            "navigation": ToggleRow("Navigation mode", "Head turns navigate, nod confirms", m.navigation),
+            "keyboard": ToggleRow("Keyboard mode", "Floating keyboard, hand cursor", m.keyboard),
         }
         for key, row in self.mode_rows.items():
             row.toggled.connect(lambda on, k=key: app.set_mode(k, on))
             modes.body.addWidget(row)
             if key == "mouse":
                 self.two_hand_row = ToggleRow(
-                    "Two-hand mouse", "Your control hand moves the cursor; the other hand pinches to click "
-                    "and drag. Steadier clicks.", app.settings.hand.two_hand_mouse)
+                    "Two-hand mouse", "This hand moves, the other clicks and drags",
+                    app.settings.hand.two_hand_mouse)
                 self.two_hand_row.toggled.connect(self._set_two_hand)
                 modes.body.addWidget(self.two_hand_row)
         modes.body.addStretch(1)
@@ -123,6 +170,7 @@ class DashboardPage(QWidget):
         app.tracking.telemetry.connect(self._on_telemetry)
         app.tracking.gesture.connect(self._on_gesture)
         app.tracking.command.connect(self._on_command)
+        app.tracking.wheel_state.connect(self._on_wheel)
         app.tracking.frame_ready.connect(self._on_frame)
         app.notice.connect(self.show_notice)
         self._fade = QTimer(self)
@@ -172,6 +220,8 @@ class DashboardPage(QWidget):
         self.pause_btn.setText("Resume" if st == EngineState.PAUSED else "Pause")
         self.clear_btn.setVisible(st == EngineState.EMERGENCY)
         self.test_row.setChecked(self.app.safety.test_mode)
+        self.wheel_toggle.setChecked(self.app.settings.wheel.enabled)
+        self.mode_badge.setText(f"MODE · {self.app.active_mode}")
         if not running:
             self.preview.clear("Camera is off")
             for chip, det in ((self.hand_chip, self.hand_detail), (self.head_chip, self.head_detail)):
@@ -186,6 +236,51 @@ class DashboardPage(QWidget):
     def _set_two_hand(self, on: bool) -> None:
         s = self.app.settings.copy_deep()
         s.hand.two_hand_mouse = on
+        self.app.update_settings(s)
+
+    def _set_wheel_enabled(self, on: bool) -> None:
+        s = self.app.settings.copy_deep()
+        s.wheel.enabled = on
+        self.app.update_settings(s)
+
+    # ------------------------------------------------------- AIR COMMAND/display
+    def _on_wheel(self, update) -> None:
+        from ...core.air_commands import AIR_COMMAND_BY_ID
+
+        if getattr(update, "active", False):
+            selected = AIR_COMMAND_BY_ID.get(getattr(update, "selected", None) or "")
+            self.wheel_chip.set("Wheel open", "on")
+            self.wheel_label.setText(selected.label if selected else "Point to choose")
+        else:
+            self.wheel_chip.set("Wheel idle", "off")
+            self.wheel_label.setText("Closed")
+
+    def _refresh_displays(self) -> None:
+        from ...services.display_service import enumerate_displays
+
+        displays = enumerate_displays()
+        self._loading_displays = True
+        try:
+            self.display_combo.clear()
+            for display in displays:
+                self.display_combo.addItem(display.label, display.index)
+        finally:
+            self._loading_displays = False
+        if not displays:
+            self.display_detail.setText("No display detected — cursor falls back to the primary monitor.")
+            return
+        index = self.display_combo.findData(self.app.settings.display.monitor)
+        self.display_combo.setCurrentIndex(max(0, index))
+        self.display_detail.setText(
+            f"{len(displays)} display(s). The cursor is mapped to the selected one; "
+            "switching glides instead of jumping."
+        )
+
+    def _display_picked(self, _index: int) -> None:
+        if self._loading_displays or self.display_combo.currentData() is None:
+            return
+        s = self.app.settings.copy_deep()
+        s.display.monitor = int(self.display_combo.currentData())
         self.app.update_settings(s)
 
     def _on_camera(self, status: str, message: str) -> None:

@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIRDESK — Your hands. Your computer. No touch required.</title>
+  <meta name="description" content="AIRDESK is an offline, hands-free desktop controller built on the open-source Gestura project: webcam hand tracking, a radial Air Command wheel, safe macros, a floating keyboard and multi-monitor cursor control." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"></div>
+
+  <header class="site-header" id="top">
+    <div class="wrap header-inner">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-text">
+          <strong>AIRDESK</strong>
+          <small>YOUR HANDS. YOUR COMPUTER.</small>
+        </span>
+      </a>
+      <nav class="nav" id="nav">
+        <a href="#overview">Overview</a>
+        <a href="#foundation">Foundation</a>
+        <a href="#adds">What AIRDESK adds</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#air-command">Air Command</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#platforms">Platforms</a>
+      </nav>
+      <button class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="nav">Menu</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ───────────────────────── hero ───────────────────────── -->
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="dot"></span> Offline desktop control · GPL-3.0-or-later</p>
+        <h1>Control your computer<br /><span class="grad">without touching it.</span></h1>
+        <p class="lede">
+          AIRDESK turns a normal webcam into a pointer, a keyboard and a command surface.
+          Hold up a fist, point, pinch — and the machine responds. Every frame is processed
+          on your own computer. No cloud, no paid AI, no footage stored.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#overview">Explore the product</a>
+          <a class="btn btn-ghost" href="#foundation">Built on Gestura</a>
+        </div>
+        <ul class="hero-facts">
+          <li><strong>100%</strong><span>local inference</span></li>
+          <li><strong>12</strong><span>allow-listed wheel commands</span></li>
+          <li><strong>2</strong><span>platforms targeted</span></li>
+        </ul>
+      </div>
+
+      <div class="hero-visual" aria-hidden="true">
+        <div class="wheel-demo" id="wheelDemo">
+          <div class="ring"></div>
+          <div class="hub">
+            <span class="hub-kicker">AIR COMMAND</span>
+            <strong id="hubLabel">Hover a sector</strong>
+            <span class="hub-hint">pinch to confirm · open palm cancels</span>
+          </div>
+          <div class="sectors" id="sectors"></div>
+        </div>
+        <div class="scanline"></div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── overview ───────────────────────── -->
+    <section class="section wrap" id="overview">
+      <div class="section-head">
+        <p class="eyebrow">The problem</p>
+        <h2>Touching a keyboard is not always an option.</h2>
+        <p class="section-lede">
+          Laboratories, clean rooms, clinics, workshops, kitchens, kitchens-of-code with a very
+          full desk — the places where a mouse and keyboard are awkward, unhygienic or simply
+          out of reach. Existing gesture tools are either expensive, cloud-dependent, or limited
+          to moving a cursor around.
+        </p>
+      </div>
+      <div class="grid-3">
+        <article class="card">
+          <h3>Reach</h3>
+          <p>Camera-only control: point to move, pinch to click, hold to drag, scroll and zoom with finger counts.</p>
+        </article>
+        <article class="card">
+          <h3>Express</h3>
+          <p>A radial command wheel, two-hand chords and a floating keyboard turn gestures into intent, not just motion.</p>
+        </article>
+        <article class="card">
+          <h3>Trust</h3>
+          <p>Allow-listed actions only, test mode before live input, emergency stop, and a strictly local video pipeline.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── foundation ───────────────────────── -->
+    <section class="section wrap" id="foundation">
+      <div class="section-head">
+        <p class="eyebrow">Honest attribution</p>
+        <h2>AIRDESK is an evolution of Gestura, not a rewrite.</h2>
+        <p class="section-lede">
+          The foundation is the open-source <strong>Gestura</strong> project by
+          <strong>Raphzaf</strong>, licensed GPL-3.0-or-later. Its tracking pipeline, gesture
+          engine, controller layer and PySide6 interface were studied, kept and extended —
+          never replaced with untested alternatives. The upstream LICENSE and copyright
+          notices remain in place, and this site separates inherited work from AIRDESK
+          contributions on purpose.
+        </p>
+      </div>
+
+      <div class="compare">
+        <div class="compare-col inherited">
+          <h3><span class="tag">Inherited</span> Already working in Gestura</h3>
+          <ul>
+            <li>Webcam capture with OpenCV and selectable capture backends</li>
+            <li>MediaPipe hand + face landmark detection</li>
+            <li>Cursor movement, left/right click, double click, drag &amp; drop</li>
+            <li>Vertical and horizontal scrolling, volume gestures</li>
+            <li>Two-hand mouse mode and head-based navigation</li>
+            <li>Floating QWERTY / AZERTY virtual keyboard</li>
+            <li>Per-gesture mapping, calibration wizard, camera preview</li>
+            <li>Performance monitoring, emergency stop, test vs. live mode</li>
+            <li>Configuration validation and the existing test suite</li>
+          </ul>
+        </div>
+        <div class="compare-col added">
+          <h3><span class="tag accent">AIRDESK</span> Added on top</h3>
+          <ul>
+            <li>Radial <strong>Air Command</strong> wheel with a fixed allow-list</li>
+            <li>Safe <strong>Air Macros</strong> editor with reorderable, delayed steps</li>
+            <li>Configurable two-hand gesture <strong>chords</strong></li>
+            <li><strong>Multi-monitor</strong> cursor mapping with glide-on-switch</li>
+            <li>X11 / Wayland session detection and diagnostics</li>
+            <li>Deep-navy glass interface, mode badges, new dashboard cards</li>
+            <li>Linux install notes for Kali, including non-root input rules</li>
+            <li>New automated tests for every added subsystem</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── what it adds ───────────────────────── -->
+    <section class="section wrap" id="adds">
+      <div class="section-head">
+        <p class="eyebrow">Feature set</p>
+        <h2>Four additions, one gesture vocabulary.</h2>
+      </div>
+      <div class="grid-2">
+        <article class="card feature">
+          <span class="num">01</span>
+          <h3>Air Command</h3>
+          <p>
+            A fist opens a radial menu; the right index finger sweeps the sectors; a pinch
+            confirms; an open palm cancels. Every entry maps to a pre-declared action —
+            browser, calculator, file manager, screenshot, keyboard, modes, media, pause.
+            Gesture input can never compose a shell command.
+          </p>
+        </article>
+        <article class="card feature">
+          <span class="num">02</span>
+          <h3>Air Macros</h3>
+          <p>
+            Chain up to a dozen safe steps — open an allow-listed app, press a whitelisted
+            shortcut, switch mode, raise the keyboard, change volume, advance slides — with
+            per-step delays, reordering and a manual test run. Destructive macros can require
+            an explicit confirmation.
+          </p>
+        </article>
+        <article class="card feature">
+          <span class="num">03</span>
+          <h3>Two-hand chords</h3>
+          <p>
+            The right hand keeps the cursor; the left hand becomes a modifier. Pose pairs such
+            as fist + two fingers trigger a command once, with debouncing and a cooldown, and
+            only while the wheel is closed so the two systems never fight.
+          </p>
+        </article>
+        <article class="card feature">
+          <span class="num">04</span>
+          <h3>Multi-monitor control</h3>
+          <p>
+            Displays are enumerated from the OS, one is selectable from the dashboard, and
+            normalized hand coordinates map into that display's geometry — including negative
+            origins. Switching displays glides the cursor in bounded steps instead of
+            teleporting it.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── architecture ───────────────────────── -->
+    <section class="section wrap" id="architecture">
+      <div class="section-head">
+        <p class="eyebrow">Computer vision</p>
+        <h2>One frame, five stages, no network hop.</h2>
+        <p class="section-lede">
+          Capture, landmark detection, feature extraction, gesture state machines and finally an
+          allow-listed action. Each stage is a plain Python component with its own tests, which
+          is why new features could be added without touching the detector.
+        </p>
+      </div>
+      <ol class="pipeline">
+        <li>
+          <span class="stage">01 · Capture</span>
+          <h3>OpenCV video source</h3>
+          <p>Webcam frames at the requested resolution and FPS, with MSMF / DirectShow / V4L2 backend selection.</p>
+        </li>
+        <li>
+          <span class="stage">02 · Perception</span>
+          <h3>MediaPipe landmarks</h3>
+          <p>21 hand landmarks per hand plus face landmarks, produced offline on the CPU.</p>
+        </li>
+        <li>
+          <span class="stage">03 · Features</span>
+          <h3>Normalized geometry</h3>
+          <p>Pose classification, pinch distance, handedness, confidence and smoothing — resolution independent.</p>
+        </li>
+        <li>
+          <span class="stage">04 · Intent</span>
+          <h3>Gesture state machines</h3>
+          <p>Debounce, cooldown, chord matching and the radial wheel selector turn poses into a single intent.</p>
+        </li>
+        <li>
+          <span class="stage">05 · Action</span>
+          <h3>Allow-list + safety</h3>
+          <p>Registry lookup, safety manager, worker thread, visible feedback. Test mode simulates instead of injecting.</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ───────────────────────── air command ───────────────────────── -->
+    <section class="section wrap" id="air-command">
+      <div class="split">
+        <div>
+          <p class="eyebrow">Interaction design</p>
+          <h2>A wheel you can learn in ten seconds.</h2>
+          <p class="section-lede">
+            The wheel is a pure state machine, not a pile of timers: hold to open, sweep to
+            select, pinch to confirm, open palm to cancel, with a dead zone in the middle so a
+            resting hand never fires. Confirmation needs a fresh pinch, so a held pinch cannot
+            trigger twice.
+          </p>
+          <ol class="steps">
+            <li><strong>Hold the left fist</strong><span>Opens after a configurable hold; a progress arc shows the wait.</span></li>
+            <li><strong>Point with the right hand</strong><span>Twelve fixed sectors, sector 0 at twelve o'clock, clockwise.</span></li>
+            <li><strong>Pinch to confirm</strong><span>Selected sector closes the wheel and runs one allow-listed command.</span></li>
+            <li><strong>Open palm to cancel</strong><span>Closes with no action, after a short hold that avoids accidental cancels.</span></li>
+          </ol>
+        </div>
+        <div class="commands" aria-label="Air Command sectors">
+          <span>Open browser</span><span>Calculator</span><span>File manager</span>
+          <span>Screenshot</span><span>Virtual keyboard</span><span>Air Mouse</span>
+          <span>Air Keyboard</span><span>Presentation</span><span>Volume +</span>
+          <span>Volume −</span><span>Play / pause</span><span>Pause tracking</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── keyboard + privacy ───────────────────────── -->
+    <section class="section wrap" id="privacy">
+      <div class="grid-2">
+        <article class="card">
+          <p class="eyebrow">Also included</p>
+          <h3>Floating virtual keyboard</h3>
+          <p>
+            A translucent QWERTY / AZERTY board that hovers over other windows. The hand cursor
+            selects keys, presses are debounced, and nothing is sent while test mode or the
+            emergency stop is active. Layout and scale are configurable.
+          </p>
+        </article>
+        <article class="card">
+          <p class="eyebrow">Privacy</p>
+          <h3>Your camera never leaves the machine</h3>
+          <p>
+            Frames are consumed in memory by a local worker, rendered to a preview and discarded.
+            No recording, no upload, no analytics, no accounts. The only files written are your
+            settings, your macros and screenshots you explicitly trigger.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ───────────────────────── platforms ───────────────────────── -->
+    <section class="section wrap" id="platforms">
+      <div class="section-head">
+        <p class="eyebrow">Platform support</p>
+        <h2>Windows today, Kali Linux as the deployment target.</h2>
+        <p class="section-lede">
+          Development and interactive testing happen on Windows 11. Kali Linux is the target
+          machine, so the code prefers X11 tools, detects Wayland and reports what it cannot do
+          instead of pretending. Anything below marked “untested” has not yet been run on that
+          operating system.
+        </p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Capability</th><th>Windows 11</th><th>Kali / Linux (X11)</th><th>Wayland session</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Camera capture</td><td class="ok">Tested</td><td>Untested on this machine</td><td>Depends on portal support</td></tr>
+            <tr><td>Pointer + clicks</td><td class="ok">Tested</td><td>Via XTest (untested)</td><td class="warn">Not supported by design</td></tr>
+            <tr><td>Volume / media keys</td><td class="ok">Tested</td><td>Media keys (untested)</td><td class="warn">Reported unsupported</td></tr>
+            <tr><td>Multi-monitor mapping</td><td class="ok">Tested</td><td>Untested</td><td>Geometry only</td></tr>
+            <tr><td>Air Command + macros</td><td class="ok">Tested in test mode</td><td>Logic is platform-neutral</td><td>Logic is platform-neutral</td></tr>
+            <tr><td>Emergency stop</td><td class="ok">Tested</td><td>Untested</td><td>Untested</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="fineprint">
+        AIRDESK never requires the desktop application to run as root. On Kali, camera access
+        comes from the <code>video</code> group and the input libraries from normal user
+        sessions. Run <code>airdesk --diagnostics</code> to see exactly which backends are
+        available on the machine in front of you.
+      </p>
+    </section>
+
+    <!-- ───────────────────────── limitations ───────────────────────── -->
+    <section class="section wrap" id="limitations">
+      <div class="section-head">
+        <p class="eyebrow">Technical honesty</p>
+        <h2>What this build does not claim.</h2>
+      </div>
+      <div class="grid-2">
+        <article class="card">
+          <h3>Known limitations</h3>
+          <ul class="tight">
+            <li>Hand tracking needs reasonable, even lighting and roughly 40–90 cm of distance.</li>
+            <li>Gesture recognition is rule-based geometry, not a trained classifier.</li>
+            <li>Wayland compositors block synthetic input; X11 (or a X11 session) is required for control.</li>
+            <li>Kali behaviour is implemented and unit-tested, but not yet exercised on Kali hardware.</li>
+            <li>Macro steps stay inside fixed allow-lists — there is no terminal action, by design.</li>
+          </ul>
+        </article>
+        <article class="card">
+          <h3>How changes were verified</h3>
+          <ul class="tight">
+            <li>Baseline of the unmodified upstream: full test suite + a scripted smoke run.</li>
+            <li>After every change: the same suite, now including tests for the new subsystems.</li>
+            <li>UI checked by rendering real Qt windows, not by assuming the stylesheet applied.</li>
+            <li>Real-desktop input deliberately disabled while verifying.</li>
+            <li>Anything unverified is labelled unverified rather than described as working.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <div>
+        <strong class="footer-brand">AIRDESK</strong>
+        <p>YOUR HANDS. YOUR COMPUTER. NO TOUCH REQUIRED.</p>
+      </div>
+      <div class="footer-meta">
+        <p>
+          Derived from <a href="https://github.com/Raphzaf/gestura" rel="noopener">Gestura</a>
+          by Raphzaf. Licensed GPL-3.0-or-later; upstream copyright notices are preserved.
+        </p>
+        <p>Free software. No cloud processing. No accounts.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

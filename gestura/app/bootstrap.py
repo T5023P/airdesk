@@ -52,13 +52,17 @@ def create_qt_app(argv: list[str]) -> QApplication:
         try:  # own taskbar group + icon instead of python.exe's
             import ctypes
 
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Gestura.Desktop")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AIRDESK.Desktop")
         except Exception:  # noqa: BLE001
             pass
     from ..ui import theme
 
+    from .. import APP_NAME
+
     qt = QApplication.instance() or QApplication(argv)
-    qt.setApplicationName("Gestura")
+    qt.setApplicationName(APP_NAME)
+    # Organisation stays "Gestura": it is the on-disk owner of the existing
+    # settings/macros directory, so renaming it would orphan user configuration.
     qt.setOrganizationName("Gestura")
     qt.setStyle("Fusion")
     font = QFont("Segoe UI" if sys.platform == "win32" else qt.font().family())

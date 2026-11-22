@@ -3,14 +3,14 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "gestura"
-version = "0.3.0"
-description = "Hands-free desktop control with real-time hand and head tracking."
+name = "airdesk"
+version = "0.4.0"
+description = "AIRDESK - your hands. your computer. Offline hands-free desktop control, derived from Gestura."
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
-authors = [{ name = "Gestura contributors" }]
+authors = [{ name = "AIRDESK contributors" }]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: Microsoft :: Windows",
@@ -31,6 +31,7 @@ dependencies = [
 dev = ["pytest>=8", "pyinstaller>=6"]
 
 [project.scripts]
+airdesk = "gestura.app.main:main"
 gestura = "gestura.app.main:main"
 
 [tool.setuptools.packages.find]

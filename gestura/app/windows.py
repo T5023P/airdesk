@@ -18,9 +18,14 @@ from ..core.safety_manager import EngineState
 
 
 def build_main_window(app):
+    import datetime
+    from pathlib import Path
+
+    from ..ui.air_command import CommandWheelOverlay
     from ..ui.calibration.wizard import CalibrationWizard
     from ..ui.keyboard.keyboard_page import KeyboardPage
     from ..ui.keyboard.keyboard_window import KeyboardWindow
+    from ..ui.macros import MacrosPage
     from ..ui.main_window import MainWindow
     from ..ui.widgets.feedback_overlay import FeedbackOverlay
 
@@ -30,10 +35,16 @@ def build_main_window(app):
         can_send=lambda: app.safety.state != EngineState.EMERGENCY and not app.safety.test_mode)
     kw = KeyboardWindow(vk, s.keyboard.layout, s.keyboard.scale, s.keyboard.opacity)
     kpage = KeyboardPage(app, kw)
-    window = MainWindow(app, extra_pages=[("keyboard", "Virtual Keyboard", kpage)])
+    macros_page = MacrosPage(app)
+    window = MainWindow(app, extra_pages=[("keyboard", "Virtual Keyboard", kpage),
+                                          ("macros", "AIR MACROS", macros_page)])
     window.keyboard_window = kw
     overlay = FeedbackOverlay(s.interface.overlay_position)
     window.overlay = overlay
+    wheel_overlay = CommandWheelOverlay()
+    window.wheel_overlay = wheel_overlay
+    app.tracking.wheel_state.connect(wheel_overlay.set_state)
+    window.dashboard.macros_requested.connect(lambda: window.show_page("macros"))
 
     # ---- keyboard visibility / persistence
     def place_keyboard() -> None:
@@ -80,6 +91,24 @@ def build_main_window(app):
         if app.settings.interface.show_overlay:
             overlay.flash(text, kind)
 
+    def take_screenshot() -> None:
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            flash("Screenshot failed: no screen", "warn")
+            return
+        folder = Path.home() / "Pictures" / "AIRDESK"
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            target = folder / f"airdesk-{datetime.datetime.now():%Y%m%d-%H%M%S}.png"
+            if screen.grabWindow(0).save(str(target)):
+                flash(f"Screenshot saved · {target.name}", "ok")
+            else:
+                flash("Screenshot could not be saved", "warn")
+        except OSError as exc:
+            flash(f"Screenshot failed: {exc}", "warn")
+
+    app.screenshot_requested.connect(take_screenshot)
+
     def on_command(rec) -> None:
         if rec.command == "app.toggle_pause":
             return  # announced by the state change
@@ -98,9 +127,9 @@ def build_main_window(app):
         st = app.safety.state
         if st != last_state["v"]:
             if st == EngineState.PAUSED:
-                flash("Gestura paused — hold open palm to resume", "warn")
+                flash("AIRDESK paused — hold open palm to resume", "warn")
             elif st == EngineState.ACTIVE and last_state["v"] == EngineState.PAUSED:
-                flash("Gestura resumed", "ok")
+                flash("AIRDESK resumed", "ok")
             elif st == EngineState.EMERGENCY:
                 flash("EMERGENCY STOP — all control halted", "danger")
             last_state["v"] = st
@@ -119,6 +148,7 @@ def build_main_window(app):
     def close_all(event) -> None:
         kw.close()
         overlay.close()
+        wheel_overlay.close()
         original_close(event)
 
     window.closeEvent = close_all

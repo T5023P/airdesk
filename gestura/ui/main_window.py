@@ -15,7 +15,7 @@ from PySide6.QtGui import QCloseEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QButtonGroup, QHBoxLayout, QMainWindow, QPushButton, QStackedWidget, QVBoxLayout,
                                QWidget)
 
-from .. import SOURCE_URL, __version__
+from .. import APP_NAME, APP_TAGLINE, SOURCE_URL, UPSTREAM_NAME, __version__
 from ..core.safety_manager import EngineState
 from .dashboard.dashboard_page import DashboardPage
 from .gesture_studio.studio_page import StudioPage
@@ -34,8 +34,8 @@ class MainWindow(QMainWindow):
     def __init__(self, app, extra_pages: list[tuple[str, str, QWidget]] | None = None) -> None:
         super().__init__()
         self.app = app
-        self.setWindowTitle("Gestura")
-        self.resize(1320, 840)
+        self.setWindowTitle(f"{APP_NAME} — hands-free desktop control")
+        self.resize(1360, 880)
         self.setMinimumSize(1040, 680)
 
         root = QWidget()
@@ -51,8 +51,12 @@ class MainWindow(QMainWindow):
         sv = QVBoxLayout(side)
         sv.setContentsMargins(16, 22, 16, 18)
         sv.setSpacing(4)
-        sv.addWidget(label("Gestura", "brand"))
-        sv.addWidget(label("Hands-free desktop control", "brandSub"))
+        brand = label(APP_NAME, "brand")
+        brand.setToolTip(APP_TAGLINE)
+        sv.addWidget(brand)
+        tagline = label("YOUR HANDS. YOUR COMPUTER.", "brandSub")
+        tagline.setToolTip(APP_TAGLINE)
+        sv.addWidget(tagline)
         sv.addSpacing(22)
         self.stack = QStackedWidget()
         self.nav = QButtonGroup(self)
@@ -78,7 +82,7 @@ class MainWindow(QMainWindow):
             page.setProperty("title", title)
         sv.addStretch(1)
         sv.addWidget(label("All video is processed locally.\nNo footage is stored or uploaded.", "privacy"))
-        sv.addWidget(label(f"v{__version__}", "privacy"))
+        sv.addWidget(label(f"v{__version__} · built on {UPSTREAM_NAME}", "privacy"))
         # GPL v3: tell users where the source is (required wherever binaries are distributed).
         about = label(f'Free software, <a href="{SOURCE_URL}/blob/main/LICENSE">GPL v3</a> · '
                       f'<a href="{SOURCE_URL}">source code</a>', "privacy")

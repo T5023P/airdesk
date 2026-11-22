@@ -10,8 +10,14 @@
 
 from __future__ import annotations
 
+import logging
+from typing import Callable
+
 from ..config.settings import CursorSettings
+from ..services.display_service import Display, map_normalized, select_display
 from .backends import InputBackend
+
+log = logging.getLogger(__name__)
 
 
 class MouseController:
@@ -20,13 +26,72 @@ class MouseController:
     # corner does that, which is the intended emergency gesture.
     EDGE_INSET = 1
 
-    def __init__(self, backend: InputBackend, settings: CursorSettings) -> None:
+    def __init__(
+        self,
+        backend: InputBackend,
+        settings: CursorSettings,
+        displays: Callable[[], list[Display]] | None = None,
+    ) -> None:
         self.backend = backend
         self.settings = settings
         self._last: tuple[int, int] | None = None
         self._scroll_rem = [0.0, 0.0]
         self._size: tuple[int, int] | None = None
         self._dragging = False
+        # Multi-monitor support: AIRDESK maps onto the *selected* display. With
+        # no provider (tests, headless), behaviour is exactly the old single
+        # primary-monitor mapping.
+        self._display_provider = displays
+        self._displays: list[Display] = []
+        self._display_index = 0
+        self._settling = False
+        self._settle_px = 140
+
+    # ------------------------------------------------------------- displays
+    def refresh_displays(self, selected: int | None = None) -> list[Display]:
+        self._displays = list(self._display_provider()) if self._display_provider else []
+        if selected is not None:
+            self._display_index = max(0, int(selected))
+        self._display_index = min(self._display_index, max(0, len(self._displays) - 1))
+        self.invalidate_screen()
+        return self._displays
+
+    @property
+    def displays(self) -> list[Display]:
+        if self._display_provider is not None and not self._displays:
+            self.refresh_displays(self._display_index)
+        return self._displays
+
+    @property
+    def active_display(self) -> Display | None:
+        return select_display(self.displays, self._display_index)
+
+    def select_display_index(self, index: int, *, settle_px: int | None = None) -> None:
+        """Switch display. The next cursor move is rate-limited so it cannot
+        teleport across the desktop; the pointer glides to the new mapping."""
+        if index == self._display_index:
+            return
+        self._display_index = max(0, int(index))
+        if settle_px is not None:
+            self._settle_px = max(20, int(settle_px))
+        self._settling = True
+        self._last = None
+
+    def _physical_scale(self) -> float:
+        """Ratio between backend pixel space and Qt logical geometry.
+
+        Qt reports device-independent pixels; PyAutoGUI/SetCursorPos and XTest
+        use physical pixels. The ratio is derived from the primary display so a
+        125 %/150 % Windows scale factor still lands the cursor where aimed.
+        """
+        primary = next((d for d in self.displays if d.primary), None)
+        if primary is None or primary.width <= 0:
+            return 1.0
+        try:
+            width, _ = self.screen_size()
+        except Exception:  # noqa: BLE001 - backend without a display
+            return 1.0
+        return width / primary.width if width > 0 else 1.0
 
     def screen_size(self) -> tuple[int, int]:
         if self._size is None:
@@ -35,8 +100,17 @@ class MouseController:
 
     def invalidate_screen(self) -> None:
         self._size = None
+        self._last = None
 
     def to_pixels(self, u: float, v: float) -> tuple[int, int]:
+        display = self.active_display
+        if display is not None and display.valid:
+            x, y = map_normalized(u, v, display)
+            scale = self._physical_scale()
+            if scale != 1.0:
+                x = int(round(x * scale))
+                y = int(round(y * scale))
+            return x, y
         w, h = self.screen_size()
         i = self.EDGE_INSET
         x = int(round(u * (w - 1)))
@@ -46,12 +120,22 @@ class MouseController:
     def move_normalized(self, u: float, v: float) -> bool:
         """Move the cursor; returns False when inside the dead zone."""
         x, y = self.to_pixels(u, v)
+        if self._settling and self._last is not None:
+            # After a display switch, approach the new mapping in bounded steps.
+            dx, dy = x - self._last[0], y - self._last[1]
+            limit = self._settle_px
+            if abs(dx) > limit or abs(dy) > limit:
+                x = self._last[0] + max(-limit, min(limit, dx))
+                y = self._last[1] + max(-limit, min(limit, dy))
         if self._last is not None:
             dz = self.settings.dead_zone_px
             if abs(x - self._last[0]) <= dz and abs(y - self._last[1]) <= dz:
                 return False
         self.backend.move_to(x, y)
         self._last = (x, y)
+        if self._settling and (abs(x - self.to_pixels(u, v)[0]) <= 2
+                               and abs(y - self.to_pixels(u, v)[1]) <= 2):
+            self._settling = False
         return True
 
     def left_click(self) -> None:

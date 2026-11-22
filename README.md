@@ -1,16 +1,74 @@
-# Gestura
+# AIRDESK
 
-Hands-free desktop control: move the mouse with your index finger, click by
-pinching, scroll with two fingers, navigate pages with head turns and type on a
-floating virtual keyboard — using only a regular webcam. All processing runs
-locally; no video is stored or uploaded.
+### YOUR HANDS. YOUR COMPUTER. NO TOUCH REQUIRED.
 
-Primary target: **Windows 10/11 (x64)**. Built with Python, PySide6, MediaPipe
-and OpenCV.
+AIRDESK turns a normal webcam into a pointer, a floating keyboard and a radial
+command surface. Point to move, pinch to click, hold a fist to open **Air Command**,
+sweep with the other hand and pinch to run an allow-listed action. Everything is
+processed on your own computer: no cloud, no paid AI service, no footage stored or
+uploaded.
 
-> **Status: early (v0.3.0).** All six milestones are implemented and covered by
-> automated tests, including on Windows in CI, but the app has **not yet been used
-> with a live webcam by a real user**. See [What has been verified](#what-has-been-verified).
+AIRDESK is an enhanced derivative of the open-source **[Gestura](https://github.com/Raphzaf/gestura)**
+project by Raphzaf, licensed GPL-3.0-or-later. The tracking pipeline, gesture
+engine, controllers and PySide6 interface are inherited and preserved; everything
+listed below was added on top. See **[UPSTREAM.md](UPSTREAM.md)** for the exact split
+between inherited and new work, and keep the `LICENSE` file with any distribution.
+
+Primary target: **Windows 10/11 (x64)**, deployment target **Kali Linux** (X11).
+Built with Python, PySide6, MediaPipe and OpenCV.
+
+> **Status: v0.4.0 (AIRDESK).** The full suite passes on Windows 11: **237 tests,
+> 230 passed, 7 skipped**. A real webcam was measured at 640×480 / ~30 FPS by
+> `--camera-diagnostics`, and a scripted 15 s pipeline run completes at ~33 FPS. The
+> Linux/Kali code paths are implemented and unit-tested but have **not** been run on
+> Kali hardware yet — see [docs/PLATFORM_COMPATIBILITY.md](docs/PLATFORM_COMPATIBILITY.md)
+> for the honest per-feature matrix.
+
+## What AIRDESK adds
+
+* **Air Command** — a 12-sector radial wheel: left fist opens it, the right index
+  finger selects, pinch confirms, open palm cancels. Every sector maps to a fixed
+  allow-list (`gestura/core/air_commands.py`); gesture input can never compose a
+  shell command.
+* **Air Macros** — a visual editor for safe, multi-step macros (allow-listed apps,
+  shortcuts, modes, volume, presentation navigation) with reordering, per-step
+  delays, enable/disable, manual test and local JSON persistence.
+* **Two-hand chords** — configurable `left_<pose>+right_<pose>` pairs that fire once
+  per pose change, with debouncing and a cooldown.
+* **Multi-monitor control** — displays are detected, one is selectable from the
+  dashboard, hand coordinates map into that display's geometry, and switching glides
+  the cursor instead of teleporting it.
+* **Linux/Kali groundwork** — X11/Wayland detection and an explicit capability report
+  (`--diagnostics`, `--diagnostics-json`) so unsupported features are reported, never
+  silently faked. No root requirement.
+* **Interface** — deep-navy glass theme, mode badge, Air Command and display cards,
+  rebranded navigation and dashboard, all still in PySide6.
+
+## Develop on Windows, deploy on Kali
+
+Two setup scripts handle everything; nothing installs globally and nothing needs
+administrator rights.
+
+| Task | Windows 11 (development) | Kali Linux (runtime) |
+|---|---|---|
+| Install | `.\scripts\bootstrap_windows.ps1` | `./scripts/bootstrap_kali.sh --probe-camera` |
+| Run | `.\scripts\run_airdesk_windows.ps1` | `./scripts/run_airdesk_kali.sh` |
+| Tests | `.venv\Scripts\python.exe -m pytest` | `./.venv/bin/python -m pytest` |
+| Everything at once | `main.py --full-diagnostics --probe-camera` | `main.py --full-diagnostics --probe-camera` |
+| Camera proof | `main.py --camera-diagnostics` | `main.py --camera-diagnostics` |
+
+`--full-diagnostics` reports versions, models (with SHA-256), MediaPipe/OpenCV/Qt,
+input backend, audio backend, displays, camera and emergency-stop availability —
+add `--json` for machine-readable output. It never claims a capability the
+current session cannot provide.
+
+Guides: [Windows development](docs/DEVELOPMENT_WINDOWS.md) ·
+[Kali deployment](docs/DEPLOYMENT_KALI.md) ·
+[Compatibility matrix](docs/PLATFORM_COMPATIBILITY.md) ·
+[Testing](docs/TESTING_GUIDE.md) · [Troubleshooting](docs/TROUBLESHOOTING.md)
+
+> The install and usage sections below are inherited from the Gestura foundation and
+> remain accurate; the packaged artefact names still use the upstream product name.
 
 > 🇫🇷 **Guide d'installation en français : [voir plus bas](#-installation-et-premiers-pas-en-français).**
 
@@ -218,6 +276,10 @@ the system-wide emergency hotkey, the keyboard's no-focus-steal behaviour
 * [Privacy policy / Politique de confidentialité](PRIVACY.md)
 
 ## License
+
+AIRDESK is a derivative work of Gestura and stays under **GPL-3.0-or-later**. Upstream
+copyright notices and the `LICENSE` file are preserved unchanged; the split between
+inherited and new code is documented in [UPSTREAM.md](UPSTREAM.md).
 
 Gestura is free and open-source software, licensed under the
 **[GNU General Public License v3.0 or later](LICENSE)** (`GPL-3.0-or-later`).

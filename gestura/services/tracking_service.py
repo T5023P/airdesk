@@ -33,12 +33,17 @@ from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtGui import QImage
 
 from ..config.settings import Settings
+from ..core.air_commands import AIR_COMMAND_BY_ID
 from ..core.command_engine import CommandEngine, CommandRecord
+from ..core.command_wheel import CommandWheel, WheelUpdate
 from ..core.event_bus import COMMAND_BLOCKED, COMMAND_EXECUTED, GESTURE, EventBus
 from ..core.safety_manager import SafetyManager
 from ..core.types import GestureEvent
+from ..gestures.chords import ChordEngine
+from ..gestures.hand_features import compute
 from ..gestures.hand_gestures import HandGestureEngine, HandState
 from ..gestures.head_gestures import HeadGestureEngine, HeadState
+from ..macros.model import Macro
 
 log = logging.getLogger(__name__)
 
@@ -81,12 +86,14 @@ class TrackingWorker(QThread):
     telemetry = Signal(object)  # Telemetry
     gesture = Signal(object)  # GestureEvent
     camera_status = Signal(str, str)  # status, message
+    wheel_state = Signal(object)  # WheelUpdate (AIR COMMAND)
 
     RECONNECT_S = 2.0
     LOST_AFTER_S = 1.5
 
     def __init__(self, settings: Settings, commands: CommandEngine, bus: EventBus,
-                 source_spec: str | None = None, parent: QObject | None = None) -> None:
+                 source_spec: str | None = None, parent: QObject | None = None,
+                 air=None, macros=None, macro_runner=None, wheel: CommandWheel | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("gestura-tracking")
         self._settings = settings
@@ -94,6 +101,9 @@ class TrackingWorker(QThread):
         self.commands = commands
         self.bus = bus
         self.source_spec = source_spec
+        self.air = air  # AirActionRunner: allow-listed AIR COMMAND / macro executors
+        self.macro_provider = macros  # callable -> list[Macro]
+        self.macro_runner = macro_runner
         self._stop = threading.Event()
         self._frame_pending = False
         self.preview_enabled = True
@@ -101,6 +111,14 @@ class TrackingWorker(QThread):
         self.banner = ""
         self.hand_engine = HandGestureEngine(settings.hand, settings.cursor, settings.tracking)
         self.head_engine = HeadGestureEngine(settings.head)
+        self.wheel = wheel or CommandWheel(
+            activation_hold_s=settings.wheel.activation_hold_ms / 1000,
+            cancel_hold_s=settings.wheel.cancel_hold_ms / 1000,
+            dead_zone=settings.wheel.dead_zone,
+            cooldown_s=settings.wheel.cooldown_ms / 1000,
+        )
+        self.chords = ChordEngine(settings.mappings.chords)
+        self._last_wheel_selected: str | None = None
         self.processor = None
         self.frames_processed = 0
 
@@ -110,6 +128,104 @@ class TrackingWorker(QThread):
 
     def update_settings(self, settings: Settings) -> None:
         self._pending_settings = settings.copy_deep()
+
+    def _apply_wheel_settings(self, s: Settings) -> None:
+        self.wheel.activation_hold_s = s.wheel.activation_hold_ms / 1000
+        self.wheel.cancel_hold_s = s.wheel.cancel_hold_ms / 1000
+        self.wheel.dead_zone = s.wheel.dead_zone
+        self.wheel.cooldown_s = s.wheel.cooldown_ms / 1000
+        self.chords.assignments = dict(s.mappings.chords)
+
+    # ------------------------------------------------------------ AIR COMMAND
+    def _update_wheel(self, tf, now: float) -> WheelUpdate | None:
+        """Feed the radial wheel from per-hand poses and the right fingertip."""
+        cfg = self._settings.wheel
+        if not cfg.enabled or self.air is None:
+            if self.wheel.active:
+                self.wheel.close()
+                self.wheel_state.emit(WheelUpdate(active=False, just_closed=True))
+            return None
+
+        left = right = None
+        for hand in tf.hands:
+            features = compute(hand)
+            if hand.handedness == "Left" and left is None:
+                left = features
+            elif hand.handedness == "Right" and right is None:
+                right = features
+        if right is None and left is None and tf.hands:
+            right = compute(tf.hands[0])
+
+        left_pose = left.pose.value if left is not None else None
+        right_pose = right.pose.value if right is not None else None
+        activation = left_pose == cfg.activation.removeprefix("left_")
+        cancel = left_pose == cfg.cancel_gesture.removeprefix("left_")
+        confirm = (right is not None
+                   and right.thumb_index < self._settings.hand.pinch_on_ratio)
+        pointer = right.index_tip if right is not None else None
+
+        update = self.wheel.update(activation=activation, cancel=cancel,
+                                   confirm_closed=confirm, pointer=pointer, now=now)
+        if update.just_opened and self.air is not None:
+            self.air.release_inputs()
+        if update.confirmed:
+            self._publish_air(update.confirmed, now)
+
+        # Chord engine only listens while the wheel is closed: it must never
+        # fight the wheel for the same left-hand poses.
+        if not self.wheel.active and self.air is not None:
+            match = self.chords.update(left_pose, right_pose, now)
+            if match is not None:
+                self._publish_air(match.command, now, gesture=f"chord:{match.name}")
+
+        if (update.just_opened or update.just_closed
+                or update.selected != self._last_wheel_selected or update.progress > 0):
+            self._last_wheel_selected = update.selected
+            self.wheel_state.emit(update)
+        return update
+
+    def _publish_air(self, command_id: str, now: float, gesture: str = "air.command") -> None:
+        spec = AIR_COMMAND_BY_ID.get(command_id)
+        label = spec.label if spec is not None else command_id
+        try:
+            message = self.air.run_command(command_id) if self.air is not None else "no runner"
+        except Exception as exc:  # noqa: BLE001
+            log.exception("air command %s failed", command_id)
+            message = f"error: {exc}"
+        blocked = message.lower().startswith(("blocked", "no executor")) or "not executed" in message.lower()
+        record = CommandRecord(
+            command=command_id, label=label, gesture=gesture, timestamp=now,
+            executed=not blocked, simulated="test mode" in message.lower(), reason=message,
+        )
+        self.commands.history.append(record)
+        self.bus.publish(COMMAND_BLOCKED if blocked and not record.simulated else COMMAND_EXECUTED, record)
+
+    def _macro_for(self, gesture: str) -> Macro | None:
+        if self.macro_provider is None or self.macro_runner is None:
+            return None
+        for macro in self.macro_provider():
+            if macro.enabled and macro.gesture == gesture:
+                return macro
+        return None
+
+    def _run_macro(self, macro: Macro, now: float) -> None:
+        decision = self.commands.safety.check("macro.run", control=False, sensitive=False)
+        label = f"Macro · {macro.name}"
+        if not decision.allowed:
+            self.bus.publish(COMMAND_BLOCKED, CommandRecord(
+                command="macro.run", label=label, gesture=macro.gesture, timestamp=now,
+                executed=False, reason=decision.reason))
+            return
+        if decision.simulated or macro.confirm:
+            reason = "test mode" if decision.simulated else "run it from AIR MACROS to confirm"
+            self.bus.publish(COMMAND_BLOCKED, CommandRecord(
+                command="macro.run", label=label, gesture=macro.gesture, timestamp=now,
+                executed=False, simulated=decision.simulated, reason=reason))
+            return
+        result = self.macro_runner.run(macro, confirmed=True)
+        self.bus.publish(COMMAND_EXECUTED if result.ok else COMMAND_BLOCKED, CommandRecord(
+            command="macro.run", label=label, gesture=macro.gesture, timestamp=now,
+            executed=result.ok, reason=result.summary))
 
     def ack_frame(self) -> None:
         self._frame_pending = False
@@ -144,6 +260,7 @@ class TrackingWorker(QThread):
                     self.processor.configure(s.tracking, s.camera)
                     self.hand_engine.configure(s.hand, s.cursor, s.tracking)
                     self.head_engine.configure(s.head)
+                    self._apply_wheel_settings(s)
                     if camera_changed and source is not None and self.source_spec is None:
                         source.release()
                         source = None
@@ -191,7 +308,10 @@ class TrackingWorker(QThread):
 
                 hand_events = self.hand_engine.update(tf)
                 head_events = self.head_engine.update(tf)
-                dispatch_hand = s.modes.mouse or s.modes.keyboard
+                self._update_wheel(tf, captured)
+                # While AIR COMMAND is open it owns the hands: normal gestures
+                # are shown but must not click or scroll behind the wheel.
+                dispatch_hand = (s.modes.mouse or s.modes.keyboard) and not self.wheel.active
                 for ev in hand_events:
                     self._dispatch(ev, dispatch_hand)
                 for ev in head_events:
@@ -239,12 +359,19 @@ class TrackingWorker(QThread):
         if not ev.continuous:
             self.gesture.emit(ev)
             self.bus.publish(GESTURE, ev)
+            macro = self._macro_for(ev.name)
+            if macro is not None and enabled and not self.wheel.active:
+                self._run_macro(macro, ev.timestamp)
         if enabled:
             self.commands.handle(ev)
 
     def _safe_reset(self) -> None:
         self.hand_engine.reset()
         self.head_engine.reset()
+        self.chords.reset()
+        if self.wheel.active:
+            self.wheel.close()
+            self.wheel_state.emit(WheelUpdate(active=False, just_closed=True))
 
 
 class TrackingService(QObject):
@@ -256,15 +383,21 @@ class TrackingService(QObject):
     command = Signal(object)  # CommandRecord (executed, simulated or blocked)
     camera_status = Signal(str, str)
     running_changed = Signal(bool)
+    wheel_state = Signal(object)  # WheelUpdate (AIR COMMAND)
 
     def __init__(self, settings: Settings, safety: SafetyManager, commands: CommandEngine,
-                 bus: EventBus, source_spec: str | None = None, parent: QObject | None = None) -> None:
+                 bus: EventBus, source_spec: str | None = None, parent: QObject | None = None,
+                 air=None, macros=None, macro_runner=None, wheel: CommandWheel | None = None) -> None:
         super().__init__(parent)
         self.settings = settings
         self.safety = safety
         self.commands = commands
         self.bus = bus
         self.source_spec = source_spec
+        self.air = air
+        self.macros = macros
+        self.macro_runner = macro_runner
+        self.wheel = wheel
         self.worker: TrackingWorker | None = None
         self.status = CameraStatus.OFF
         self.status_message = "Camera off"
@@ -283,13 +416,16 @@ class TrackingService(QObject):
     def start(self) -> None:
         if self.running:
             return
-        w = TrackingWorker(self.settings, self.commands, self.bus, self.source_spec)
+        w = TrackingWorker(self.settings, self.commands, self.bus, self.source_spec,
+                           air=self.air, macros=self.macros, macro_runner=self.macro_runner,
+                           wheel=self.wheel)
         w.preview_enabled = self._preview
         w.overlay_flags = dict(self._overlay)
         w.frame_ready.connect(self._on_frame)
         w.telemetry.connect(self.telemetry)
         w.gesture.connect(self.gesture)
         w.camera_status.connect(self._on_status)
+        w.wheel_state.connect(self.wheel_state)
         w.finished.connect(self._on_finished)
         self.worker = w
         w.start()

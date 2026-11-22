@@ -24,13 +24,15 @@ from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QHBoxLayout, QMessageBox,
                                QPushButton, QScrollArea, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
-from ...config.settings import HandGesture, HeadGesture, Settings
+from ...config.settings import DEFAULT_CHORD_ASSIGNMENTS, HandGesture, HeadGesture, Settings
 from ...core.gesture_registry import COMMANDS, continuous_commands, discrete_commands
 from ..widgets.common import label
 
 SECTIONS = [
     ("camera", "Camera"), ("tracking", "Tracking"), ("cursor", "Cursor"), ("hand", "Hand gestures"),
-    ("head", "Head gestures"), ("safety", "Safety"), ("keyboard", "Keyboard"), ("interface", "Interface"), ("startup", "Startup"),
+    ("head", "Head gestures"), ("wheel", "AIR COMMAND"), ("display", "Displays"),
+    ("macros", "AIR MACROS"), ("safety", "Safety"), ("keyboard", "Keyboard"),
+    ("interface", "Interface"), ("startup", "Startup"),
 ]
 HIDDEN = {
     "head": {"neutral_yaw", "neutral_pitch", "neutral_roll", "calibrated"},
@@ -186,6 +188,24 @@ class SettingsPage(QWidget):
                 self._widgets[("mapping", g)] = combo
                 form.addRow(GESTURE_LABELS.get(g, g), combo)
             lay.addLayout(form)
+
+        lay.addWidget(label("TWO-HAND CHORDS", "cardTitle"))
+        lay.addWidget(label("Left hand as a modifier for a right-hand pose. Chords are ignored "
+                            "while AIR COMMAND is open, so they never fight the wheel.", "hint", wrap=True))
+        chord_form = QFormLayout()
+        chord_form.setVerticalSpacing(8)
+        chord_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
+        for name in DEFAULT_CHORD_ASSIGNMENTS:
+            combo = QComboBox()
+            combo.setMinimumWidth(280)
+            for spec in discrete_commands():
+                combo.addItem(spec.label + (" *" if spec.sensitive else ""), spec.id)
+            combo.currentIndexChanged.connect(lambda _i, n=name: self._chord_changed(n))
+            self._widgets[("chord", name)] = combo
+            left, _, right = name.partition("+")
+            chord_form.addRow(f"{left.removeprefix('left_').replace('_', ' ').title()} + "
+                              f"{right.removeprefix('right_').replace('_', ' ').title()}", combo)
+        lay.addLayout(chord_form)
         lay.addStretch(1)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -200,6 +220,10 @@ class SettingsPage(QWidget):
                 if section == "mapping":
                     group = s.mappings.hand if name.startswith("hand.") else s.mappings.head
                     idx = w.findData(group.get(name, "none"))
+                    w.setCurrentIndex(max(0, idx))
+                    continue
+                if section == "chord":
+                    idx = w.findData(s.mappings.chords.get(name, "none"))
                     w.setCurrentIndex(max(0, idx))
                     continue
                 val = getattr(getattr(s, section), name)
@@ -249,6 +273,14 @@ class SettingsPage(QWidget):
         if cmd not in COMMANDS:
             return
         self._commit(lambda d: d["mappings"][group].__setitem__(gesture, cmd))
+
+    def _chord_changed(self, name: str) -> None:
+        if self._loading:
+            return
+        cmd = self._widgets[("chord", name)].currentData()
+        if cmd not in COMMANDS:
+            return
+        self._commit(lambda d: d["mappings"]["chords"].__setitem__(name, cmd))
 
     def _reset(self) -> None:
         if QMessageBox.question(self, "Restore defaults",

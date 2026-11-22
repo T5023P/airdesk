@@ -144,10 +144,46 @@ class StartupSettings(_Section):
     open_page: Literal["dashboard", "studio"] = Field("dashboard", title="First page")
 
 
+class AirCommandSettings(_Section):
+    """Radial command wheel (AIR COMMAND)."""
+
+    enabled: bool = Field(True, title="Enable AIR COMMAND")
+    activation: Literal["left_fist", "left_palm", "left_point", "left_two_fingers"] = Field(
+        "left_fist", title="Open the wheel with (left hand)"
+    )
+    cancel_gesture: Literal["left_palm", "left_fist", "left_two_fingers"] = Field(
+        "left_palm", title="Cancel with (left hand)"
+    )
+    confirm: Literal["right_pinch", "left_pinch"] = Field(
+        "right_pinch", title="Confirm with"
+    )
+    activation_hold_ms: int = Field(250, ge=80, le=2000, title="Activation hold (ms)")
+    cancel_hold_ms: int = Field(320, ge=100, le=3000, title="Cancel hold (ms)")
+    dead_zone: float = Field(0.10, ge=0.0, le=0.4, title="Dead zone (fraction of frame)")
+    cooldown_ms: int = Field(900, ge=200, le=5000, title="Cooldown after a command (ms)")
+
+
+class DisplaySettings(_Section):
+    """Multi-monitor cursor mapping."""
+
+    monitor: int = Field(0, ge=0, le=15, title="Active display (0 = first)")
+    follow_pointer: bool = Field(False, title="Follow the physical pointer across displays")
+    settle_px: int = Field(140, ge=20, le=800, title="Max cursor step after a display switch (px)")
+
+
+class MacroSettings(_Section):
+    """AIR MACROS (visual macro editor)."""
+
+    enabled: bool = Field(True, title="Enable macros")
+    require_confirmation: bool = Field(True, title="Confirm macros that change the system")
+    path: str = Field("", title="Macro file (empty = config folder)")
+
+
 class Modes(_Section):
     mouse: bool = Field(True, title="Mouse mode (hand)")
     navigation: bool = Field(False, title="Navigation mode (head)")
     keyboard: bool = Field(False, title="Keyboard mode")
+    presentation: bool = Field(False, title="Presentation mode (swipes change slides)")
 
 
 class HandGesture(str, Enum):
@@ -178,6 +214,16 @@ class HeadGesture(str, Enum):
     ROLL_LEFT = "head.roll_left"
     ROLL_RIGHT = "head.roll_right"
 
+
+#: Two-hand chords (left modifier + right pose) available to bind to commands.
+DEFAULT_CHORD_ASSIGNMENTS: dict[str, str] = {
+    "left_fist+right_point": "none",
+    "left_fist+right_two_fingers": "media.volume_up",
+    "left_point+right_fist": "media.volume_down",
+    "left_two_fingers+right_point": "mode.air_keyboard",
+    "left_three_fingers+right_point": "mode.presentation",
+    "left_open_palm+right_fist": "app.toggle_pause",
+}
 
 DEFAULT_HAND_MAPPINGS: dict[str, str] = {
     HandGesture.CURSOR.value: "mouse.move",
@@ -210,6 +256,7 @@ DEFAULT_HEAD_MAPPINGS: dict[str, str] = {
 class MappingSettings(_Section):
     hand: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_HAND_MAPPINGS))
     head: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_HEAD_MAPPINGS))
+    chords: dict[str, str] = Field(default_factory=lambda: dict(DEFAULT_CHORD_ASSIGNMENTS))
 
     @field_validator("hand")
     @classmethod
@@ -223,6 +270,13 @@ class MappingSettings(_Section):
     def _complete_head(cls, v: dict[str, str]) -> dict[str, str]:
         merged = dict(DEFAULT_HEAD_MAPPINGS)
         merged.update({k: val for k, val in v.items() if k in DEFAULT_HEAD_MAPPINGS})
+        return merged
+
+    @field_validator("chords")
+    @classmethod
+    def _complete_chords(cls, v: dict[str, str]) -> dict[str, str]:
+        merged = dict(DEFAULT_CHORD_ASSIGNMENTS)
+        merged.update({k: val for k, val in v.items() if k in DEFAULT_CHORD_ASSIGNMENTS})
         return merged
 
 
@@ -239,6 +293,9 @@ class Settings(_Section):
     interface: InterfaceSettings = Field(default_factory=InterfaceSettings)
     modes: Modes = Field(default_factory=Modes)
     mappings: MappingSettings = Field(default_factory=MappingSettings)
+    wheel: AirCommandSettings = Field(default_factory=AirCommandSettings)
+    display: DisplaySettings = Field(default_factory=DisplaySettings)
+    macros: MacroSettings = Field(default_factory=MacroSettings)
 
     @model_validator(mode="after")
     def _check_hysteresis(self) -> "Settings":

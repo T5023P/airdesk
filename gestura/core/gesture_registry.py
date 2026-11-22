@@ -79,6 +79,15 @@ _COMMANDS: tuple[CommandSpec, ...] = (
     CommandSpec("app.toggle_pause", "Pause / resume Gestura", "Gestura", control=True),
     CommandSpec("app.emergency_stop", "Emergency stop", "Gestura", control=True),
     CommandSpec("app.toggle_keyboard", "Show / hide virtual keyboard", "Gestura", control=True),
+    # AIR COMMAND wheel / AIR MACROS. Launching and capturing are real OS
+    # effects, so they are simulated in test mode (no `control` flag).
+    CommandSpec("app.open_browser", "Open the web browser", "AIR COMMAND"),
+    CommandSpec("app.open_calculator", "Open the calculator", "AIR COMMAND"),
+    CommandSpec("app.open_file_manager", "Open the file manager", "AIR COMMAND"),
+    CommandSpec("app.screenshot", "Take a screenshot", "AIR COMMAND"),
+    CommandSpec("mode.air_mouse", "Switch to AIR MOUSE", "AIR COMMAND", control=True),
+    CommandSpec("mode.air_keyboard", "Switch to AIR KEYBOARD", "AIR COMMAND", control=True),
+    CommandSpec("mode.presentation", "Presentation mode", "AIR COMMAND", control=True),
 )
 
 COMMANDS: dict[str, CommandSpec] = {c.id: c for c in _COMMANDS}

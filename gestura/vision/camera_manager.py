@@ -60,6 +60,8 @@ class CameraSource:
         self.width, self.height, self.fps = width, height, fps
         self.backend = backend
         self.name = f"Camera {index}"
+        #: Negotiated capture size, filled in by :meth:`open` (diagnostics + UI).
+        self.frame_size: tuple[int, int] = (0, 0)
         self._cap: cv2.VideoCapture | None = None
 
     def open(self) -> bool:
@@ -80,6 +82,7 @@ class CameraSource:
         self._cap = cap
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.frame_size = (w, h)
         self.name = f"Camera {self.index} ({w}x{h})"
         return True
 
@@ -93,6 +96,7 @@ class CameraSource:
         if self._cap is not None:
             self._cap.release()
             self._cap = None
+        self.frame_size = (0, 0)
 
 
 class VideoFileSource:

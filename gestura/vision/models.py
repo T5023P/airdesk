@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 HAND_MODEL = "hand_landmarker.task"
@@ -36,11 +38,82 @@ def assets_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "assets"
 
 
+def model_dir() -> Path:
+    """Platform-independent model directory (bundle-aware, never absolute)."""
+    return assets_dir() / "models"
+
+
 def model_path(name: str) -> Path:
-    path = assets_dir() / "models" / name
+    path = model_dir() / name
     if not path.is_file():
         raise FileNotFoundError(
             f"MediaPipe model {name!r} not found at {path}. "
             "Run `python scripts/download_models.py` to fetch it."
         )
     return path
+
+
+@dataclass(slots=True)
+class ModelCheck:
+    """Result of verifying one bundled model file before startup."""
+
+    name: str
+    path: Path
+    present: bool
+    size: int = 0
+    sha256: str = ""
+    hash_ok: bool | None = None
+    detail: str = ""
+
+    @property
+    def usable(self) -> bool:
+        return self.present and self.size > 0 and self.hash_ok is not False
+
+    def summary(self) -> str:
+        if not self.present:
+            return f"{self.name}: MISSING at {self.path}"
+        state = "ok" if self.hash_ok else ("unverified" if self.hash_ok is None else "CHECKSUM MISMATCH")
+        return f"{self.name}: {self.size / 1_048_576:.1f} MiB, {state}"
+
+
+def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(chunk), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def verify_model(name: str, *, check_hash: bool = True) -> ModelCheck:
+    """Check one model without raising: diagnostics must always finish."""
+    path = model_dir() / name
+    check = ModelCheck(name=name, path=path, present=path.is_file())
+    if not check.present:
+        check.detail = "run `python scripts/download_models.py` (source documented in UPSTREAM.md)"
+        return check
+    try:
+        check.size = path.stat().st_size
+        if check_hash:
+            expected = MODEL_SHA256.get(name)
+            check.sha256 = sha256_file(path)
+            if expected:
+                check.hash_ok = check.sha256 == expected
+                if not check.hash_ok:
+                    check.detail = ("checksum differs from the pinned model: re-download it with "
+                                    "`python scripts/download_models.py --force`")
+        else:
+            check.hash_ok = None
+    except OSError as exc:  # pragma: no cover - unreadable file
+        check.detail = f"unreadable: {exc}"
+        check.hash_ok = False
+    return check
+
+
+def verify_models(*, check_hash: bool = True) -> list[ModelCheck]:
+    return [verify_model(HAND_MODEL, check_hash=check_hash),
+            verify_model(FACE_MODEL, check_hash=check_hash)]
+
+
+def models_ready(*, check_hash: bool = True) -> bool:
+    """True when every bundled model exists and matches its pinned checksum."""
+    return all(check.usable for check in verify_models(check_hash=check_hash))

@@ -232,3 +232,4 @@ installer/Output/
 
 # Microsoft Store build output (store/build_store.py)
 store/out/
+_attic/

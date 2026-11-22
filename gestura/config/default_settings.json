@@ -106,7 +106,8 @@
   "modes": {
     "mouse": true,
     "navigation": false,
-    "keyboard": false
+    "keyboard": false,
+    "presentation": false
   },
   "mappings": {
     "hand": {
@@ -133,6 +134,34 @@
       "head.tilt_up": "key.escape",
       "head.roll_left": "none",
       "head.roll_right": "none"
+    },
+    "chords": {
+      "left_fist+right_point": "none",
+      "left_fist+right_two_fingers": "media.volume_up",
+      "left_point+right_fist": "media.volume_down",
+      "left_two_fingers+right_point": "mode.air_keyboard",
+      "left_three_fingers+right_point": "mode.presentation",
+      "left_open_palm+right_fist": "app.toggle_pause"
     }
+  },
+  "wheel": {
+    "enabled": true,
+    "activation": "left_fist",
+    "cancel_gesture": "left_palm",
+    "confirm": "right_pinch",
+    "activation_hold_ms": 250,
+    "cancel_hold_ms": 320,
+    "dead_zone": 0.1,
+    "cooldown_ms": 900
+  },
+  "display": {
+    "monitor": 0,
+    "follow_pointer": false,
+    "settle_px": 140
+  },
+  "macros": {
+    "enabled": true,
+    "require_confirmation": true,
+    "path": ""
   }
 }

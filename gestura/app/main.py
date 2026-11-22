@@ -20,8 +20,37 @@ from pathlib import Path
 log = logging.getLogger("gestura")
 
 
+def _camera_index(source: str | None) -> int:
+    """Camera index for diagnostics: the --source index, else the configured one."""
+    if source and source.isdigit():
+        return int(source)
+    try:
+        from ..services.configuration_service import ConfigurationService
+
+        return int(ConfigurationService().load().camera.index)
+    except Exception:  # noqa: BLE001 - a bad config must not break diagnostics
+        return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(prog="gestura", description="Hands-free desktop control.")
+    from .. import APP_NAME, APP_TAGLINE
+
+    p = argparse.ArgumentParser(
+        prog=APP_NAME.lower(),
+        description=f"{APP_NAME} — {APP_TAGLINE}",
+    )
+    p.add_argument("--diagnostics", action="store_true",
+                   help="print platform / session capabilities (X11, Wayland, input) and exit")
+    p.add_argument("--diagnostics-json", action="store_true",
+                   help="same as --diagnostics, as JSON")
+    p.add_argument("--full-diagnostics", action="store_true",
+                   help="consolidated report: versions, models, input, audio, displays, camera")
+    p.add_argument("--camera-diagnostics", action="store_true",
+                   help="open the camera briefly and report the measured resolution and FPS")
+    p.add_argument("--probe-camera", action="store_true",
+                   help="with --full-diagnostics: also probe the camera for ~2 s")
+    p.add_argument("--json", action="store_true",
+                   help="with --full-diagnostics / --camera-diagnostics: JSON output")
     p.add_argument("--source", help="camera index, video file, image file or image folder "
                                     "(default: camera from settings)")
     mode = p.add_mutually_exclusive_group()
@@ -44,6 +73,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
     if args.config_dir:
         os.environ["GESTURA_CONFIG_DIR"] = args.config_dir
+
+    if args.diagnostics or args.diagnostics_json:
+        from ..services.platform_diagnostics import format_report
+
+        print(format_report(as_json=args.diagnostics_json or args.json))
+        return 0
+
+    if args.camera_diagnostics:
+        from ..vision.camera_diagnostics import collect_camera_report, format_camera_report
+
+        report = collect_camera_report(index=_camera_index(args.source))
+        print(format_camera_report(report, as_json=args.json or args.diagnostics_json))
+        return 0 if report.working_cameras else 1
+
+    if args.full_diagnostics:
+        from ..services.platform_diagnostics import format_full_report
+
+        print(format_full_report(as_json=args.json or args.diagnostics_json,
+                                 probe_camera=args.probe_camera))
+        return 0
 
     from .bootstrap import create_qt_app, setup_logging
 
